@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audio Sphere Visualizer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #030508;
+        --panel: rgba(14, 20, 30, 0.62);
+        --panel-border: rgba(95, 209, 255, 0.28);
+        --accent: #5fd1ff;
+        --accent-soft: rgba(95, 209, 255, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 20% 20%, rgba(30, 67, 120, 0.3), transparent 55%),
+          radial-gradient(circle at 80% 30%, rgba(120, 45, 180, 0.28), transparent 60%), var(--bg);
+        color: #eef4ff;
+        min-height: 100vh;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #three-container {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      .ui-panel {
+        position: relative;
+        z-index: 1;
+        width: min(92vw, 520px);
+        padding: 1.6rem;
+        border-radius: 20px;
+        border: 1px solid var(--panel-border);
+        background: var(--panel);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.46);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        transition: opacity 0.4s ease, transform 0.4s ease;
+      }
+
+      .ui-panel.collapsed {
+        opacity: 0;
+        transform: translateY(-12px) scale(0.97);
+        pointer-events: none;
+      }
+
+      .ui-panel h1 {
+        margin: 0;
+        font-size: clamp(1.2rem, 3vw, 1.7rem);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      .hint {
+        margin: 0.6rem 0 1.2rem;
+        font-size: 0.9rem;
+        color: rgba(226, 241, 255, 0.7);
+      }
+
+      .control-row {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        margin-bottom: 0.9rem;
+        flex-wrap: wrap;
+      }
+
+      .file-input {
+        position: relative;
+        overflow: hidden;
+        border-radius: 12px;
+        background: rgba(95, 209, 255, 0.08);
+        border: 1px dashed rgba(95, 209, 255, 0.35);
+        color: #9ad8ff;
+        font-size: 0.95rem;
+        padding: 0.6rem 1.1rem;
+        cursor: pointer;
+        flex: 1 1 auto;
+        text-align: center;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+      }
+
+      .file-input:hover {
+        background: rgba(95, 209, 255, 0.18);
+        border-color: rgba(95, 209, 255, 0.6);
+        transform: translateY(-1px);
+      }
+
+      .file-input input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      input[type="url"],
+      input[type="text"] {
+        flex: 1 1 230px;
+        padding: 0.65rem 0.9rem;
+        border-radius: 12px;
+        border: 1px solid rgba(95, 209, 255, 0.2);
+        background: rgba(7, 12, 20, 0.72);
+        color: #e4f6ff;
+        font-size: 0.92rem;
+        transition: border 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      input[type="url"]:focus {
+        outline: none;
+        border-color: rgba(95, 209, 255, 0.6);
+        box-shadow: 0 0 0 3px rgba(95, 209, 255, 0.18);
+      }
+
+      button {
+        border: none;
+        border-radius: 12px;
+        padding: 0.65rem 1.2rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        background: linear-gradient(135deg, rgba(95, 209, 255, 0.85), rgba(96, 130, 255, 0.85));
+        color: #031020;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 22px rgba(95, 209, 255, 0.25);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      #playPause {
+        flex: 0 0 auto;
+      }
+
+      #dropZone {
+        border-radius: 14px;
+        border: 1px dashed rgba(95, 209, 255, 0.32);
+        padding: 0.85rem 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-size: 0.9rem;
+        color: rgba(223, 243, 255, 0.8);
+        background: var(--accent-soft);
+        transition: border 0.2s ease, background 0.2s ease, color 0.2s ease;
+      }
+
+      #dropZone.active {
+        border-color: rgba(95, 209, 255, 0.75);
+        background: rgba(95, 209, 255, 0.2);
+        color: #dff7ff;
+      }
+
+      .slider-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 1rem;
+        font-size: 0.92rem;
+      }
+
+      #sensitivity {
+        flex: 1;
+        accent-color: var(--accent);
+      }
+
+      #sensitivityValue {
+        font-variant-numeric: tabular-nums;
+        min-width: 2.4rem;
+        display: inline-block;
+        text-align: right;
+      }
+
+      #message {
+        position: fixed;
+        bottom: 2.2rem;
+        left: 50%;
+        transform: translate(-50%, 120%);
+        padding: 0.9rem 1.2rem;
+        border-radius: 14px;
+        background: rgba(12, 19, 28, 0.85);
+        border: 1px solid rgba(95, 209, 255, 0.35);
+        color: #dff7ff;
+        transition: transform 0.4s ease;
+        max-width: min(88vw, 520px);
+        text-align: center;
+        z-index: 2;
+        pointer-events: none;
+        font-size: 0.92rem;
+      }
+
+      #message.show {
+        transform: translate(-50%, 0);
+      }
+
+      #message[data-type="warn"] {
+        border-color: rgba(255, 209, 143, 0.5);
+        color: #ffe9b9;
+      }
+
+      #message[data-type="error"] {
+        border-color: rgba(255, 142, 142, 0.6);
+        color: #ffdada;
+      }
+
+      #panelToggle {
+        position: fixed;
+        bottom: clamp(1rem, 3vw, 2.4rem);
+        right: clamp(1rem, 5vw, 2.6rem);
+        z-index: 3;
+        border: none;
+        border-radius: 999px;
+        padding: 0.68rem 1.35rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        background: linear-gradient(135deg, rgba(95, 209, 255, 0.9), rgba(96, 130, 255, 0.88));
+        color: #041522;
+        cursor: pointer;
+        box-shadow: 0 12px 32px rgba(5, 15, 25, 0.45);
+        backdrop-filter: blur(8px);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      }
+
+      #panelToggle:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 42px rgba(8, 24, 38, 0.55);
+      }
+
+      #panelToggle[aria-expanded="false"] {
+        background: linear-gradient(135deg, rgba(19, 33, 56, 0.92), rgba(36, 48, 78, 0.9));
+        color: rgba(187, 224, 255, 0.88);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+      }
+
+      @media (max-width: 540px) {
+        .ui-panel {
+          padding: 1.3rem;
+        }
+
+        .control-row {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        button,
+        .file-input {
+          width: 100%;
+        }
+
+        #playPause {
+          width: 100%;
+        }
+
+        #panelToggle {
+          bottom: 1.2rem;
+          right: 1.2rem;
+          font-size: 0.85rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="three-container" aria-hidden="true"></div>
+    <main id="controlPanel" class="ui-panel">
+      <h1>Audio Sphere Visualizer</h1>
+      <p class="hint">Unggah file audio atau gunakan URL yang mendukung CORS. Drag &amp; drop juga tersedia.</p>
+      <div class="control-row">
+        <label class="file-input">
+          <span>Pilih File Audio</span>
+          <input id="fileInput" type="file" accept="audio/*" />
+        </label>
+        <button id="playPause" type="button">Play</button>
+      </div>
+      <div class="control-row">
+        <input id="urlInput" type="url" placeholder="https://contoh.com/audio.mp3" spellcheck="false" />
+        <button id="loadUrl" type="button">Muat URL</button>
+      </div>
+      <div id="dropZone">Atau seret &amp; lepas file / URL audio Anda di sini</div>
+      <div class="slider-row">
+        <label for="sensitivity">Sensitivitas: <span id="sensitivityValue">1.2</span></label>
+        <input id="sensitivity" type="range" min="0.4" max="3" step="0.1" value="1.2" />
+      </div>
+    </main>
+    <div id="message" role="status" aria-live="polite"></div>
+    <button
+      id="panelToggle"
+      type="button"
+      aria-controls="controlPanel"
+      aria-expanded="true"
+      title="Tampilkan atau sembunyikan panel kontrol"
+    >
+      Sembunyikan Kontrol
+    </button>
+
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script>
+      // Bungkus seluruh logika agar tidak mengotori scope global.
+      (() => {
+        const container = document.getElementById("three-container");
+        const fileInput = document.getElementById("fileInput");
+        const urlInput = document.getElementById("urlInput");
+        const loadUrlBtn = document.getElementById("loadUrl");
+        const dropZone = document.getElementById("dropZone");
+        const playPauseBtn = document.getElementById("playPause");
+        const sensitivitySlider = document.getElementById("sensitivity");
+        const sensitivityValue = document.getElementById("sensitivityValue");
+        const messageBox = document.getElementById("message");
+        const panel = document.querySelector(".ui-panel");
+        const panelToggle = document.getElementById("panelToggle");
+
+        let messageTimer;
+        let autoHideTimer = null;
+        let userPinnedPanel = false;
+        let panelVisible = true;
+        let audioElement = null;
+        const BAND_COUNT = 8;
+
+        function setPanelVisibility(visible) {
+          panelVisible = visible;
+          panel.classList.toggle("collapsed", !visible);
+          panelToggle.textContent = visible ? "Sembunyikan Kontrol" : "Tampilkan Kontrol";
+          panelToggle.setAttribute("aria-expanded", visible ? "true" : "false");
+        }
+
+        function cancelPanelAutoHide() {
+          if (autoHideTimer) {
+            clearTimeout(autoHideTimer);
+            autoHideTimer = null;
+          }
+        }
+
+        function autoHidePanel(delay = 2800) {
+          if (userPinnedPanel || !audioElement || audioElement.paused) {
+            return;
+          }
+          cancelPanelAutoHide();
+          autoHideTimer = setTimeout(() => {
+            if (
+              !userPinnedPanel &&
+              audioElement &&
+              !audioElement.paused &&
+              !panel.contains(document.activeElement) &&
+              panelVisible
+            ) {
+              setPanelVisibility(false);
+            }
+          }, delay);
+        }
+
+        panelToggle.addEventListener("click", () => {
+          const shouldShow = panel.classList.contains("collapsed");
+          setPanelVisibility(shouldShow);
+          userPinnedPanel = shouldShow;
+          if (!shouldShow) {
+            userPinnedPanel = false;
+            cancelPanelAutoHide();
+          }
+        });
+
+        // Tampilkan notifikasi ringan untuk interaksi pengguna.
+        function setMessage(text = "", type = "info", persist = false) {
+          clearTimeout(messageTimer);
+          if (!text) {
+            messageBox.classList.remove("show");
+            return;
+          }
+          messageBox.textContent = text;
+          messageBox.dataset.type = type;
+          messageBox.classList.add("show");
+          if (!persist) {
+            messageTimer = setTimeout(() => messageBox.classList.remove("show"), 4200);
+          }
+        }
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          setMessage("Browser Anda tidak mendukung Web Audio API. Coba gunakan Chrome, Edge, atau Firefox.", "error", true);
+          return;
+        }
+
+        // Siapkan pipeline audio dengan Web Audio API.
+        const audioContext = new AudioContextClass();
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        audioElement = new Audio();
+        audioElement.crossOrigin = "anonymous";
+        audioElement.preload = "auto";
+        audioElement.loop = true;
+        let mediaElementSource = null;
+        let currentObjectUrl = null;
+
+        function ensureAudioGraph() {
+          if (!mediaElementSource) {
+            mediaElementSource = audioContext.createMediaElementSource(audioElement);
+            mediaElementSource.connect(analyser);
+            analyser.connect(audioContext.destination);
+          }
+        }
+
+        async function resumeContext() {
+          if (audioContext.state === "suspended") {
+            try {
+              await audioContext.resume();
+            } catch (err) {
+              console.warn("Gagal melanjutkan AudioContext:", err);
+            }
+          }
+        }
+
+        async function prepareAndPlay(src, label, options = {}) {
+          const { isObjectUrl = false } = options;
+          await resumeContext();
+          ensureAudioGraph();
+
+          if (currentObjectUrl && currentObjectUrl !== src) {
+            URL.revokeObjectURL(currentObjectUrl);
+            currentObjectUrl = null;
+          }
+
+          if (isObjectUrl) {
+            currentObjectUrl = src;
+          }
+
+          audioElement.pause();
+          audioElement.src = src;
+          audioElement.currentTime = 0;
+          audioElement.load();
+
+          try {
+            await audioElement.play();
+            setMessage(`Memutar: ${label}. Tombol kontrol tersedia di kanan bawah.`, "info");
+            autoHidePanel();
+          } catch (err) {
+            setMessage(`Gagal memutar audio: ${err.message}`, "error", true);
+            console.error(err);
+            setPanelVisibility(true);
+          }
+          updatePlayButton();
+        }
+
+        function updatePlayButton() {
+          playPauseBtn.textContent = audioElement.paused ? "Play" : "Pause";
+        }
+
+        async function handleUrlLoad(rawUrl) {
+          const url = rawUrl.trim();
+          if (!url) {
+            setMessage("Masukkan URL audio terlebih dahulu.", "warn");
+            return;
+          }
+          if (/(youtube\.com|youtu\.be)/i.test(url)) {
+            setMessage("Link YouTube tidak dapat diputar langsung oleh Web Audio API. Gunakan file lain.", "warn");
+            return;
+          }
+          if (!/^https?:\/\//i.test(url)) {
+            setMessage("Format URL tidak valid. Gunakan http:// atau https://", "error");
+            return;
+          }
+          setMessage("Memuat audio dari URL...", "info");
+          await prepareAndPlay(url, url.replace(/https?:\/\//i, ""));
+        }
+
+        // Event handler interaksi pengguna.
+        fileInput.addEventListener("change", (event) => {
+          const [file] = event.target.files || [];
+          if (!file) return;
+          if (!file.type.startsWith("audio")) {
+            setMessage("Silakan pilih file audio.", "error");
+            return;
+          }
+          const objectUrl = URL.createObjectURL(file);
+          prepareAndPlay(objectUrl, file.name, { isObjectUrl: true });
+        });
+
+        loadUrlBtn.addEventListener("click", () => {
+          handleUrlLoad(urlInput.value);
+        });
+
+        urlInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            handleUrlLoad(urlInput.value);
+          }
+        });
+
+        ["dragenter", "dragover"].forEach((type) => {
+          dropZone.addEventListener(type, (event) => {
+            event.preventDefault();
+            dropZone.classList.add("active");
+          });
+        });
+
+        ["dragleave", "dragend"].forEach((type) => {
+          dropZone.addEventListener(type, () => dropZone.classList.remove("active"));
+        });
+
+        dropZone.addEventListener("drop", (event) => {
+          event.preventDefault();
+          dropZone.classList.remove("active");
+
+          const { files } = event.dataTransfer;
+          if (files && files.length) {
+            const [file] = files;
+            if (!file.type.startsWith("audio")) {
+              setMessage("File yang dijatuhkan tidak dikenali sebagai audio.", "error");
+              return;
+            }
+            const objectUrl = URL.createObjectURL(file);
+            prepareAndPlay(objectUrl, file.name, { isObjectUrl: true });
+            return;
+          }
+
+          const url = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
+          if (url) {
+            handleUrlLoad(url);
+            return;
+          }
+          setMessage("Tidak ada data audio yang dikenali dari drop tersebut.", "warn");
+        });
+
+        ["dragover", "drop"].forEach((type) => {
+          window.addEventListener(type, (event) => {
+            if (event.target !== dropZone) {
+              event.preventDefault();
+            }
+          });
+        });
+
+        playPauseBtn.addEventListener("click", async () => {
+          await resumeContext();
+          if (!audioElement.src) {
+            setMessage("Belum ada audio yang dimuat.", "warn");
+            return;
+          }
+          if (audioElement.paused) {
+            try {
+              await audioElement.play();
+              setMessage("Audio diputar.", "info");
+            } catch (err) {
+              setMessage("Tidak dapat memutar audio saat ini.", "error");
+            }
+          } else {
+            audioElement.pause();
+            setMessage("Audio dijeda.", "info");
+          }
+          updatePlayButton();
+        });
+
+        audioElement.addEventListener("play", () => {
+          updatePlayButton();
+        });
+
+        audioElement.addEventListener("playing", () => {
+          autoHidePanel();
+        });
+
+        audioElement.addEventListener("pause", () => {
+          updatePlayButton();
+          cancelPanelAutoHide();
+          setPanelVisibility(true);
+        });
+
+        audioElement.addEventListener("ended", () => {
+          setMessage("Audio selesai diputar.", "info");
+          cancelPanelAutoHide();
+          setPanelVisibility(true);
+          updatePlayButton();
+        });
+
+        let sensitivity = parseFloat(sensitivitySlider.value);
+        sensitivityValue.textContent = sensitivity.toFixed(1);
+
+        sensitivitySlider.addEventListener("input", (event) => {
+          sensitivity = parseFloat(event.target.value);
+          sensitivityValue.textContent = sensitivity.toFixed(1);
+        });
+
+        // Setup inti Three.js.
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x04060b, 1);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.18;
+        container.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x05060e, 0.045);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 15);
+        scene.add(camera);
+
+        const clock = new THREE.Clock();
+
+        const ambientLight = new THREE.AmbientLight(0x1a243a, 1.4);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0x76d0ff, 1.05);
+        keyLight.position.set(8, 12, 10);
+        scene.add(keyLight);
+
+        const rimLight = new THREE.PointLight(0x2240ff, 0.8, 40);
+        rimLight.position.set(-8, -10, -6);
+        scene.add(rimLight);
+
+        // Geometri inti: icosahedron beresolusi tinggi untuk menghasilkan detail unik.
+        const coreGeometry = new THREE.IcosahedronGeometry(5, 5);
+        const vertexCount = coreGeometry.attributes.position.count;
+        const basePositions = new Float32Array(coreGeometry.attributes.position.array);
+        const corePositions = coreGeometry.attributes.position.array;
+        const directions = new Float32Array(vertexCount * 3);
+        const baseRadius = new Float32Array(vertexCount);
+        const lowLatitudeWeight = new Float32Array(vertexCount);
+        const midLatitudeWeight = new Float32Array(vertexCount);
+        const highLatitudeWeight = new Float32Array(vertexCount);
+        const azimuthWeight = new Float32Array(vertexCount);
+        const vertexPhase = new Float32Array(vertexCount);
+        const vertexNoise = new Float32Array(vertexCount);
+        const displacedRadius = new Float32Array(vertexCount);
+
+        const coreColors = new Float32Array(vertexCount * 3);
+        coreGeometry.setAttribute("color", new THREE.BufferAttribute(coreColors, 3));
+
+        for (let i = 0; i < vertexCount; i++) {
+          const idx = i * 3;
+          const x = basePositions[idx];
+          const y = basePositions[idx + 1];
+          const z = basePositions[idx + 2];
+          const length = Math.sqrt(x * x + y * y + z * z) || 1;
+          const nx = x / length;
+          const ny = y / length;
+          const nz = z / length;
+          directions[idx] = nx;
+          directions[idx + 1] = ny;
+          directions[idx + 2] = nz;
+          baseRadius[i] = length;
+          displacedRadius[i] = length;
+          vertexPhase[i] = Math.random() * Math.PI * 2;
+          vertexNoise[i] = Math.random() * 3.14 + 0.3;
+
+          const absY = Math.abs(ny);
+          const equatorial = Math.min(1, Math.sqrt(nx * nx + nz * nz));
+          lowLatitudeWeight[i] = Math.pow(1 - absY, 1.45);
+          midLatitudeWeight[i] = Math.pow(equatorial * (0.58 + (1 - absY) * 0.32), 1.24);
+          highLatitudeWeight[i] = Math.pow(absY, 2.15);
+          azimuthWeight[i] = (Math.atan2(nz, nx) + Math.PI) / (Math.PI * 2);
+        }
+
+        const coreMaterial = new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          metalness: 0.68,
+          roughness: 0.32,
+          emissive: new THREE.Color(0x0f1b28),
+          emissiveIntensity: 1.1,
+          transparent: true,
+          opacity: 0.96
+        });
+        const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
+        coreMesh.castShadow = false;
+        coreMesh.receiveShadow = false;
+        scene.add(coreMesh);
+
+        const edgeGeometry = new THREE.EdgesGeometry(coreGeometry, 8);
+        const edgeMaterial = new THREE.LineBasicMaterial({
+          color: 0x5fe3ff,
+          transparent: true,
+          opacity: 0.32
+        });
+        const edgeFrame = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+        scene.add(edgeFrame);
+
+        const radialGeometry = new THREE.BufferGeometry();
+        const radialPositions = new Float32Array(vertexCount * 6);
+        const radialColors = new Float32Array(vertexCount * 6);
+        radialGeometry.setAttribute("position", new THREE.BufferAttribute(radialPositions, 3));
+        radialGeometry.setAttribute("color", new THREE.BufferAttribute(radialColors, 3));
+        const radialMaterial = new THREE.LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.75
+        });
+        const radialLines = new THREE.LineSegments(radialGeometry, radialMaterial);
+        scene.add(radialLines);
+
+        for (let i = 0; i < vertexCount; i++) {
+          const dirIdx = i * 3;
+          const posIdx = i * 6;
+          const nx = directions[dirIdx];
+          const ny = directions[dirIdx + 1];
+          const nz = directions[dirIdx + 2];
+          const startRadius = baseRadius[i] * 0.92;
+          radialPositions[posIdx] = nx * startRadius;
+          radialPositions[posIdx + 1] = ny * startRadius;
+          radialPositions[posIdx + 2] = nz * startRadius;
+          radialPositions[posIdx + 3] = nx * baseRadius[i];
+          radialPositions[posIdx + 4] = ny * baseRadius[i];
+          radialPositions[posIdx + 5] = nz * baseRadius[i];
+        }
+
+        // Tambahkan partikel ringan di sekitar bentuk untuk nuansa futuristik.
+        const particleCount = 1200;
+        const particleGeometry = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+          const radius = 8.5 + Math.random() * 6.5;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const sinPhi = Math.sin(phi);
+          const idx = i * 3;
+          particlePositions[idx] = radius * sinPhi * Math.cos(theta);
+          particlePositions[idx + 1] = radius * Math.cos(phi);
+          particlePositions[idx + 2] = radius * sinPhi * Math.sin(theta);
+        }
+        particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+        const particleMaterial = new THREE.PointsMaterial({
+          color: new THREE.Color(0x5affff),
+          size: 0.16,
+          transparent: true,
+          opacity: 0.65,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          sizeAttenuation: true
+        });
+        const particles = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(particles);
+
+        const tmpColor = new THREE.Color();
+        const tmpEmissive = new THREE.Color();
+        const smoothedBands = new Float32Array(BAND_COUNT);
+
+        function updateVisualizer(data, elapsed) {
+          let total = 0;
+          const binsPerBand = Math.floor(data.length / BAND_COUNT) || 1;
+          for (let i = 0; i < BAND_COUNT; i++) {
+            let bandSum = 0;
+            const start = i * binsPerBand;
+            const end = i === BAND_COUNT - 1 ? data.length : start + binsPerBand;
+            for (let j = start; j < end; j++) {
+              const val = data[j];
+              bandSum += val;
+              total += val;
+            }
+            const avg = bandSum / (end - start || 1) / 255;
+            const curved = Math.pow(avg, 1.25);
+            smoothedBands[i] = THREE.MathUtils.lerp(smoothedBands[i], curved, 0.18);
+          }
+
+          const average = total / (data.length || 1) / 255;
+          const bassEnergy = (smoothedBands[0] + smoothedBands[1]) * 0.5;
+          const midEnergy = (smoothedBands[2] + smoothedBands[3] + smoothedBands[4]) / 3;
+          const trebleEnergy = (smoothedBands[5] + smoothedBands[6] + smoothedBands[7]) * 0.25;
+          const combinedAverage = (bassEnergy + midEnergy + trebleEnergy) / 3;
+
+          const swirlSpeed = 1.4 + midEnergy * 2.4;
+          const rippleSpeed = 2.8 + trebleEnergy * 5;
+          const hueBase = THREE.MathUtils.lerp(0.56, 0.08, combinedAverage);
+          const innerRadiusScale = 0.78 + combinedAverage * 0.18;
+
+          for (let i = 0; i < vertexCount; i++) {
+            const dirIdx = i * 3;
+            const posIdx = i * 6;
+            const nx = directions[dirIdx];
+            const ny = directions[dirIdx + 1];
+            const nz = directions[dirIdx + 2];
+            const azimuth = azimuthWeight[i];
+
+            const lowInfluence = bassEnergy * lowLatitudeWeight[i];
+            const midInfluence = midEnergy * midLatitudeWeight[i];
+            const highInfluence = trebleEnergy * highLatitudeWeight[i];
+            const flowing = Math.sin(vertexPhase[i] + elapsed * swirlSpeed + azimuth * Math.PI * 4) * (0.28 + midEnergy * 0.62);
+            const rippling = Math.cos(vertexNoise[i] + elapsed * rippleSpeed + azimuth * Math.PI * 7) * (0.22 + trebleEnergy * 0.8);
+            const breathing = Math.sin(elapsed * 0.55 + vertexPhase[i] * 1.9) * (0.16 + combinedAverage * 0.4);
+
+            const displacement = (lowInfluence * 3.6 + midInfluence * 2.8 + highInfluence * 2.2) * sensitivity + flowing + rippling + breathing;
+            const targetRadius = baseRadius[i] + displacement;
+            const easedRadius = THREE.MathUtils.lerp(
+              displacedRadius[i],
+              THREE.MathUtils.clamp(targetRadius, baseRadius[i] * 0.7, baseRadius[i] + 6),
+              0.16 + combinedAverage * 0.25
+            );
+            displacedRadius[i] = easedRadius;
+
+            const px = nx * easedRadius;
+            const py = ny * easedRadius;
+            const pz = nz * easedRadius;
+            corePositions[dirIdx] = px;
+            corePositions[dirIdx + 1] = py;
+            corePositions[dirIdx + 2] = pz;
+
+            const hue = (hueBase + azimuth * 0.2 + flowing * 0.02 + rippling * 0.015 + 1) % 1;
+            const saturation = THREE.MathUtils.lerp(0.58, 0.94, trebleEnergy);
+            const lightness = THREE.MathUtils.lerp(0.28, 0.62, midEnergy + highInfluence * 0.4);
+            tmpColor.setHSL(hue, saturation, lightness);
+            tmpEmissive.copy(tmpColor).offsetHSL(0.02, -0.18, 0.18);
+
+            coreColors[dirIdx] = tmpColor.r;
+            coreColors[dirIdx + 1] = tmpColor.g;
+            coreColors[dirIdx + 2] = tmpColor.b;
+
+            const innerRadius = baseRadius[i] * innerRadiusScale;
+            radialPositions[posIdx] = nx * innerRadius;
+            radialPositions[posIdx + 1] = ny * innerRadius;
+            radialPositions[posIdx + 2] = nz * innerRadius;
+
+            const rayLength = easedRadius + Math.max(0, displacement) * 0.55 + combinedAverage * 1.6 + 0.5;
+            radialPositions[posIdx + 3] = nx * rayLength;
+            radialPositions[posIdx + 4] = ny * rayLength;
+            radialPositions[posIdx + 5] = nz * rayLength;
+
+            radialColors[posIdx] = tmpColor.r * 0.88;
+            radialColors[posIdx + 1] = tmpColor.g * 0.88;
+            radialColors[posIdx + 2] = tmpColor.b * 0.88;
+            radialColors[posIdx + 3] = tmpEmissive.r;
+            radialColors[posIdx + 4] = tmpEmissive.g;
+            radialColors[posIdx + 5] = tmpEmissive.b;
+          }
+
+          coreGeometry.attributes.position.needsUpdate = true;
+          coreGeometry.attributes.color.needsUpdate = true;
+          coreGeometry.computeVertexNormals();
+          radialGeometry.attributes.position.needsUpdate = true;
+          radialGeometry.attributes.color.needsUpdate = true;
+
+          coreMaterial.emissiveIntensity = THREE.MathUtils.lerp(0.8, 2.5, combinedAverage);
+          coreMaterial.opacity = THREE.MathUtils.lerp(0.88, 0.98, Math.min(1, combinedAverage * 1.5));
+
+          tmpColor.setHSL(hueBase, 0.85, THREE.MathUtils.lerp(0.34, 0.58, midEnergy));
+          edgeMaterial.color.lerp(tmpColor, 0.25);
+          edgeMaterial.opacity = THREE.MathUtils.lerp(0.18, 0.52, combinedAverage + trebleEnergy * 0.5);
+          radialMaterial.opacity = THREE.MathUtils.lerp(0.42, 0.9, trebleEnergy + combinedAverage * 0.4);
+
+          const spinBoost = bassEnergy * 0.09;
+          coreMesh.rotation.y += 0.012 + spinBoost;
+          coreMesh.rotation.x += 0.004 + spinBoost * 0.6;
+          coreMesh.rotation.z += trebleEnergy * 0.035;
+          edgeFrame.rotation.copy(coreMesh.rotation);
+          radialLines.rotation.copy(coreMesh.rotation);
+
+          particles.rotation.y += 0.0007 + combinedAverage * 0.012;
+          particles.rotation.x += 0.00025 + combinedAverage * 0.008;
+          particleMaterial.size = THREE.MathUtils.clamp(0.16 + trebleEnergy * 0.4, 0.12, 0.65);
+          particleMaterial.opacity = THREE.MathUtils.clamp(THREE.MathUtils.lerp(0.38, 0.82, combinedAverage), 0.34, 0.84);
+
+          ambientLight.intensity = THREE.MathUtils.lerp(1, 2.1, combinedAverage);
+          keyLight.intensity = THREE.MathUtils.lerp(0.9, 2.05, midEnergy + combinedAverage * 0.4);
+          rimLight.intensity = THREE.MathUtils.lerp(0.65, 1.8, trebleEnergy);
+          rimLight.color.setHSL(THREE.MathUtils.lerp(0.55, 0.16, trebleEnergy), 0.92, 0.57);
+        }
+
+        function animate() {
+          requestAnimationFrame(animate);
+          const elapsed = clock.getElapsedTime();
+          if (!audioElement.paused && audioElement.readyState >= 2) {
+            analyser.getByteFrequencyData(frequencyData);
+            updateVisualizer(frequencyData, elapsed);
+          } else {
+            frequencyData.fill(0);
+            updateVisualizer(frequencyData, elapsed);
+          }
+          renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener("resize", () => {
+          const width = window.innerWidth;
+          const height = window.innerHeight;
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(width, height);
+        });
+
+        setPanelVisibility(true);
+        updatePlayButton();
+        setMessage("Muat file audio atau URL untuk memulai visualizer.", "info");
+      })();
+    </script>
+  </body>
+</html>
