@@ -731,25 +731,59 @@
         const particleCount = 1200;
         const particleGeometry = new THREE.BufferGeometry();
         const particlePositions = new Float32Array(particleCount * 3);
+        const particleColors = new Float32Array(particleCount * 3);
+        const particleTexture = (() => {
+          const size = 128;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+          gradient.addColorStop(0, "rgba(255,255,255,0.95)");
+          gradient.addColorStop(0.25, "rgba(195,240,255,0.9)");
+          gradient.addColorStop(0.6, "rgba(90,210,255,0.35)");
+          gradient.addColorStop(1, "rgba(90,210,255,0)");
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, size, size);
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.generateMipmaps = true;
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.needsUpdate = true;
+          return texture;
+        })();
+        const particleColor = new THREE.Color();
         for (let i = 0; i < particleCount; i++) {
           const radius = 8.5 + Math.random() * 6.5;
           const theta = Math.random() * Math.PI * 2;
           const phi = Math.acos(2 * Math.random() - 1);
           const sinPhi = Math.sin(phi);
+          const colorHue = 0.5 + Math.random() * 0.08;
+          particleColor.setHSL(colorHue, 0.8, 0.55 + Math.random() * 0.25);
           const idx = i * 3;
           particlePositions[idx] = radius * sinPhi * Math.cos(theta);
           particlePositions[idx + 1] = radius * Math.cos(phi);
           particlePositions[idx + 2] = radius * sinPhi * Math.sin(theta);
+          particleColors[idx] = particleColor.r;
+          particleColors[idx + 1] = particleColor.g;
+          particleColors[idx + 2] = particleColor.b;
         }
         particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+        particleGeometry.setAttribute("color", new THREE.BufferAttribute(particleColors, 3));
         const particleMaterial = new THREE.PointsMaterial({
-          color: new THREE.Color(0x5affff),
-          size: 0.16,
+          map: particleTexture,
+          alphaMap: particleTexture,
+          vertexColors: true,
+          color: new THREE.Color(0x7ddaff),
+          size: 0.22,
           transparent: true,
-          opacity: 0.65,
+          opacity: 0.78,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
-          sizeAttenuation: true
+          sizeAttenuation: true,
+          alphaTest: 0.01
         });
         const particles = new THREE.Points(particleGeometry, particleMaterial);
         scene.add(particles);
